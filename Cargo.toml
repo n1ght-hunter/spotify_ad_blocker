@@ -1,0 +1,28 @@
+[package]
+name = "spotify_ad_blocker"
+version = "1.0.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+trayicon = {path = "trayicon"}
+tokio = { version = "1.22.0", features = ["full"] }
+
+
+[dependencies.windows]
+features = [
+  "Win32_Foundation",
+  "Win32_System_Threading",
+  "Win32_UI_WindowsAndMessaging",
+  "Media",
+  "Foundation_Collections",
+  "Media_Control",
+  "Win32_System_ProcessStatus",
+]
+version = "0.43"
+
+[workspace]
+members = [
+    "trayicon",
+]
