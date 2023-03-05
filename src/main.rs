@@ -3,10 +3,9 @@
 pub mod ad_killer;
 
 use ad_killer::spotify_add_killer;
-use std::{
-    mem::{MaybeUninit},
-    sync::Arc,
-};
+use log::{debug, info, LevelFilter};
+use log4rs::{append::file::FileAppender, encode::pattern::PatternEncoder, Config, config::{Appender, Root}};
+use std::{mem::MaybeUninit, sync::Arc};
 use tokio::sync::Mutex;
 use trayicon::{MenuBuilder, TrayIconBuilder};
 use windows::Win32::{
@@ -14,13 +13,24 @@ use windows::Win32::{
     UI::WindowsAndMessaging::{DispatchMessageA, GetMessageA, TranslateMessage},
 };
 
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+enum Events {
+    Exit,
+}
 
 #[tokio::main]
 async fn main() {
-    #[derive(Copy, Clone, Eq, PartialEq, Debug)]
-    enum Events {
-        Exit,
-    }
+    let logfile = FileAppender::builder()
+        .encoder(Box::new(PatternEncoder::new("{l} {d(%Y-%m-%d %H:%M:%S)(local)} - {m}\n")))
+        .build("log/output.log").unwrap();
+
+    let config = Config::builder()
+        .appender(Appender::builder().build("logfile", Box::new(logfile)))
+        .build(Root::builder().appender("logfile").build(LevelFilter::Debug)).unwrap();
+
+    log4rs::init_config(config).unwrap();
+
+    info!("starting spotify ad blocker");
     let exit = Arc::new(Mutex::new(false));
     let proxy_exit = exit.clone();
     let spotify_proxy_exit = exit.clone();
@@ -29,6 +39,7 @@ async fn main() {
 
     let icon = include_bytes!("../assets/icon1.ico");
 
+    debug!("setting up tray icon");
     // Needlessly complicated tray icon with all the whistles and bells
     let _tray_icon = TrayIconBuilder::new()
         .sender(s)
@@ -38,19 +49,22 @@ async fn main() {
         .build()
         .unwrap();
 
+    info!("spawning spodify add killer");
     tokio::spawn(spotify_add_killer(spotify_proxy_exit));
 
+    info!("spawning event handler");
     tokio::spawn(async move {
         while let Some(event) = r.recv().await {
-            println!("event");
             match event {
                 Events::Exit => {
+                    info!("event {:?}", event);
                     *proxy_exit.lock().await = true;
                 }
             }
         }
     });
 
+    info!("start system loop");
     loop {
         unsafe {
             if *exit.lock().await {

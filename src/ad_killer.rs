@@ -1,5 +1,6 @@
 use std::{ffi::OsString, os::windows::prelude::OsStringExt, sync::Arc, time::Duration};
 
+use log::{info, debug};
 use tokio::sync::Mutex;
 use windows::{
     Media::Control::{
@@ -44,16 +45,20 @@ pub async fn spotify_add_killer(exit: Arc<Mutex<bool>>) {
             && session.GetPlaybackInfo().unwrap().PlaybackStatus().unwrap()
                 == GlobalSystemMediaTransportControlsSessionPlaybackStatus::Playing
         {
+            info!("blocking ad");
             unsafe {
                 let handle = OpenProcess(PROCESS_TERMINATE, false, data.pid).unwrap();
                 TerminateProcess(handle, 1);
+                debug!("spotify process killed");
                 CloseHandle(handle);
                 tokio::time::sleep(Duration::from_millis(200)).await;
+                debug!("starting new spotify process in background");
                 tokio::process::Command::new(data.exe_path.clone())
                     .args(["--minimized"])
                     .spawn()
                     .unwrap().wait().await.unwrap();
                 tokio::time::sleep(Duration::from_millis(200)).await;
+                debug!("waiting to get spodify media session");
                 let session = {
                     let mut ses = get_spotify_sesstion().await;
                     while ses.is_none() {
@@ -65,6 +70,7 @@ pub async fn spotify_add_killer(exit: Arc<Mutex<bool>>) {
                 while session.GetPlaybackInfo().unwrap().PlaybackStatus().unwrap()
                     != GlobalSystemMediaTransportControlsSessionPlaybackStatus::Playing
                 {
+                    debug!("skip to start playing track");
                     session.TrySkipNextAsync().unwrap().await.unwrap();
                     tokio::time::sleep(Duration::from_millis(200)).await;
                 }
@@ -72,6 +78,7 @@ pub async fn spotify_add_killer(exit: Arc<Mutex<bool>>) {
                 tokio::time::sleep(Duration::from_millis(1000)).await;
             }
         } else {
+            debug!("waiting");
             tokio::time::sleep(Duration::from_millis(1000)).await;
             data.title = get_title(data.hwnd);
         }

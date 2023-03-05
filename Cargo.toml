@@ -8,6 +8,8 @@ edition = "2021"
 [dependencies]
 trayicon = {path = "trayicon"}
 tokio = { version = "1", features = ["full"] }
+log = "0.4.17"
+log4rs = "1.2.0"
 
 
 [dependencies.windows]
