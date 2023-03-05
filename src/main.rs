@@ -1,4 +1,4 @@
-// mod media_controls;
+#![windows_subsystem = "windows"]
 
 pub mod ad_killer;
 

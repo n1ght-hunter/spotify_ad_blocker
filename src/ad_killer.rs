@@ -52,7 +52,7 @@ pub async fn spotify_add_killer(exit: Arc<Mutex<bool>>) {
                 tokio::process::Command::new(data.exe_path.clone())
                     .args(["--minimized"])
                     .spawn()
-                    .unwrap();
+                    .unwrap().wait().await.unwrap();
                 tokio::time::sleep(Duration::from_millis(200)).await;
                 let session = {
                     let mut ses = get_spotify_sesstion().await;
