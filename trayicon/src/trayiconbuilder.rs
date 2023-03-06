@@ -1,5 +1,5 @@
+use crate::{Icon, MenuBuilder, Sender, TrayIcon};
 use std::fmt::{Display, Formatter};
-use crate::{Icon, MenuBuilder, TrayIcon, Sender};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Error {
@@ -23,8 +23,7 @@ impl Display for Error {
     }
 }
 
-impl std::error::Error for Error {
-}
+impl std::error::Error for Error {}
 
 /// Tray Icon builder
 ///
@@ -39,8 +38,9 @@ impl std::error::Error for Error {
 ///
 /// [Open full example with winit here 🢅](https://github.com/Ciantic/trayicon-rs/blob/master/examples/winit/src/main.rs)
 #[derive(Debug, Clone)]
-pub struct TrayIconBuilder<T>
+pub struct TrayIconBuilder<S, T>
 where
+    S: Sender<T>,
     T: PartialEq + Clone + 'static,
 {
     pub(crate) icon: Result<Icon, Error>,
@@ -49,15 +49,16 @@ where
     pub(crate) on_click: Option<T>,
     pub(crate) on_double_click: Option<T>,
     pub(crate) on_right_click: Option<T>,
-    pub(crate) sender: Option<Sender<T>>,
+    pub(crate) sender: Option<S>,
 }
 
-impl<T> TrayIconBuilder<T>
+impl<S, T> TrayIconBuilder<S, T>
 where
+    S: Sender<T>,
     T: PartialEq + Clone + 'static,
 {
     #[allow(clippy::new_without_default)]
-    pub fn new() -> TrayIconBuilder<T> {
+    pub fn new() -> TrayIconBuilder<S, T> {
         TrayIconBuilder {
             icon: Err(Error::IconMissing),
             menu: None,
@@ -77,7 +78,7 @@ where
         f(self)
     }
 
-    pub fn sender(mut self, s: Sender<T>) -> Self {
+    pub fn sender(mut self, s: S) -> Self {
         self.sender = Some(s);
         self
     }
@@ -120,7 +121,7 @@ where
         self
     }
 
-    pub fn build(self) -> Result<TrayIcon<T>, Error> {
+    pub fn build(self) -> Result<TrayIcon<S, T>, Error> {
         Ok(TrayIcon::new(crate::build_trayicon(&self)?, self))
     }
 }

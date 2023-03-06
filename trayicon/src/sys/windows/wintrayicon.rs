@@ -9,18 +9,20 @@ use winapi::um::winuser;
 
 use super::wchar::wchar;
 use super::{msgs, winnotifyicon::WinNotifyIcon, MenuSys};
-use crate::{Error, Icon, MenuBuilder, TrayIconBase, Sender, send};
+use crate::{Error, Icon, MenuBuilder, Sender, TrayIconBase};
 
-pub type WinTrayIcon<T> = WindowBox<T>;
+pub type WinTrayIcon<S, T> = WindowBox<S, T>;
 
 /// WindowBox retains the memory for the Window object until WM_NCDESTROY
 #[derive(Debug)]
-pub struct WindowBox<T>(*mut WinTrayIconImpl<T>)
+pub struct WindowBox<S, T>(*mut WinTrayIconImpl<S, T>)
 where
+    S: Sender<T>,
     T: PartialEq + Clone + 'static;
 
-impl<T> Drop for WindowBox<T>
+impl<S, T> Drop for WindowBox<S, T>
 where
+    S: Sender<T>,
     T: PartialEq + Clone + 'static,
 {
     fn drop(&mut self) {
@@ -33,19 +35,21 @@ where
     }
 }
 
-impl<T> Deref for WindowBox<T>
+impl<S, T> Deref for WindowBox<S, T>
 where
+    S: Sender<T>,
     T: PartialEq + Clone + 'static,
 {
-    type Target = WinTrayIconImpl<T>;
+    type Target = WinTrayIconImpl<S, T>;
 
-    fn deref(&self) -> &WinTrayIconImpl<T> {
+    fn deref(&self) -> &WinTrayIconImpl<S, T> {
         unsafe { &mut *(self.0) }
     }
 }
 
-impl<T> DerefMut for WindowBox<T>
+impl<S, T> DerefMut for WindowBox<S, T>
 where
+    S: Sender<T>,
     T: PartialEq + Clone + 'static,
 {
     fn deref_mut(&mut self) -> &mut Self::Target {
@@ -57,12 +61,13 @@ where
 ///
 /// In Windows the Tray Icon requires a window for message pump, it's not shown.
 #[derive(Debug)]
-pub struct WinTrayIconImpl<T>
+pub struct WinTrayIconImpl<S, T>
 where
+    S: Sender<T>,
     T: PartialEq + Clone + 'static,
 {
     hwnd: HWND,
-    sender: Sender<T>,
+    sender: S,
     menu: Option<MenuSys<T>>,
     notify_icon: WinNotifyIcon,
     on_click: Option<T>,
@@ -71,23 +76,34 @@ where
     msg_taskbarcreated: Option<UINT>,
 }
 
-unsafe impl<T> Send for WinTrayIconImpl<T> where T: PartialEq + Clone {}
-unsafe impl<T> Sync for WinTrayIconImpl<T> where T: PartialEq + Clone {}
-
-impl<T> WinTrayIconImpl<T>
+unsafe impl<S, T> Send for WinTrayIconImpl<S, T>
 where
+    S: Sender<T>,
+    T: PartialEq + Clone,
+{
+}
+unsafe impl<S, T> Sync for WinTrayIconImpl<S, T>
+where
+    S: Sender<T>,
+    T: PartialEq + Clone,
+{
+}
+
+impl<S, T> WinTrayIconImpl<S, T>
+where
+    S: Sender<T>,
     T: PartialEq + Clone + 'static,
 {
     #[allow(clippy::new_ret_no_self)]
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
-        sender: Sender<T>,
+        sender: S,
         menu: Option<MenuSys<T>>,
         notify_icon: WinNotifyIcon,
         on_click: Option<T>,
         on_double_click: Option<T>,
         on_right_click: Option<T>,
-    ) -> Result<WinTrayIcon<T>, Error>
+    ) -> Result<WinTrayIcon<S, T>, Error>
     where
         T: PartialEq + Clone + 'static,
     {
@@ -96,7 +112,7 @@ where
             let wnd_class_name = wchar("TrayIconCls");
             let wnd_class = winuser::WNDCLASSW {
                 style: 0,
-                lpfnWndProc: Some(WinTrayIconImpl::<T>::winproc),
+                lpfnWndProc: Some(WinTrayIconImpl::<S, T>::winproc),
                 hInstance: hinstance,
                 lpszClassName: wnd_class_name.as_ptr() as _,
                 cbClsExtra: 0,
@@ -163,7 +179,7 @@ where
                     // Left click tray icon
                     winuser::WM_LBUTTONUP => {
                         if let Some(e) = self.on_click.as_ref() {
-                            send(&self.sender, e.to_owned());
+                            &self.sender.send(e.to_owned());
                         }
                     }
 
@@ -171,7 +187,7 @@ where
                     winuser::WM_RBUTTONUP => {
                         // Send right click event
                         if let Some(e) = self.on_right_click.as_ref() {
-                            send(&self.sender, e.to_owned());
+                            &self.sender.send(e.to_owned());
                         }
 
                         // Show menu, if it's there
@@ -188,7 +204,7 @@ where
                     // Double click tray icon
                     winuser::WM_LBUTTONDBLCLK => {
                         if let Some(e) = self.on_double_click.as_ref() {
-                            send(&self.sender, e.to_owned());
+                            &self.sender.send(e.to_owned());
                         }
                     }
                     _ => {}
@@ -206,7 +222,7 @@ where
                 if cmd == 0 {
                     if let Some(v) = self.menu.as_ref() {
                         if let Some(event) = v.ids.get(&(identifier as usize)) {
-                            send(&self.sender, event.to_owned());
+                            &self.sender.send(event.to_owned());
                         }
                     }
                 }
@@ -236,7 +252,7 @@ where
             winuser::WM_CREATE => {
                 let create_struct: &mut winuser::CREATESTRUCTW = &mut *(lparam as *mut _);
                 // Arc::from_raw(ptr)
-                let window: &mut WinTrayIconImpl<T> =
+                let window: &mut WinTrayIconImpl<S, T> =
                     &mut *(create_struct.lpCreateParams as *mut _);
                 window.hwnd = hwnd;
                 winuser::SetWindowLongPtrW(hwnd, winuser::GWL_USERDATA, window as *mut _ as _);
@@ -245,7 +261,7 @@ where
             winuser::WM_NCDESTROY => {
                 let window_ptr = winuser::SetWindowLongPtrW(hwnd, winuser::GWL_USERDATA, 0);
                 if window_ptr != 0 {
-                    let ptr = window_ptr as *mut WinTrayIconImpl<T>;
+                    let ptr = window_ptr as *mut WinTrayIconImpl<S, T>;
                     let mut window = Box::from_raw(ptr);
                     window.wndproc(msg, wparam, lparam)
                 } else {
@@ -255,7 +271,7 @@ where
             _ => {
                 let window_ptr = winuser::GetWindowLongPtrW(hwnd, winuser::GWL_USERDATA);
                 if window_ptr != 0 {
-                    let window: &mut WinTrayIconImpl<T> = &mut *(window_ptr as *mut _);
+                    let window: &mut WinTrayIconImpl<S, T> = &mut *(window_ptr as *mut _);
                     window.wndproc(msg, wparam, lparam)
                 } else {
                     winuser::DefWindowProcW(hwnd, msg, wparam, lparam)
@@ -265,8 +281,9 @@ where
     }
 }
 
-impl<T> TrayIconBase<T> for WinTrayIconImpl<T>
+impl<S, T> TrayIconBase<T> for WinTrayIconImpl<S, T>
 where
+    S: Sender<T>,
     T: PartialEq + Clone + 'static,
 {
     /// Set the tooltip
@@ -296,8 +313,9 @@ where
     }
 }
 
-impl<T> Drop for WinTrayIconImpl<T>
+impl<S, T> Drop for WinTrayIconImpl<S, T>
 where
+    S: Sender<T>,
     T: PartialEq + Clone + 'static,
 {
     fn drop(&mut self) {

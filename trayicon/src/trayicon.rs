@@ -1,18 +1,23 @@
-use crate::{Error, Icon, MenuBuilder, TrayIconBase, TrayIconBuilder};
+use crate::{Error, Icon, MenuBuilder, Sender, TrayIconBase, TrayIconBuilder};
 
-pub struct TrayIcon<T>
+pub struct TrayIcon<S, T>
 where
+    S: Sender<T>,
     T: PartialEq + Clone + 'static,
 {
-    sys: crate::TrayIconSys<T>,
-    builder: TrayIconBuilder<T>,
+    sys: crate::TrayIconSys<S, T>,
+    builder: TrayIconBuilder<S, T>,
 }
 
-impl<T> TrayIcon<T>
+impl<S, T> TrayIcon<S, T>
 where
+    S: Sender<T>,
     T: PartialEq + Clone + 'static,
 {
-    pub(crate) fn new(sys: crate::TrayIconSys<T>, builder: TrayIconBuilder<T>) -> TrayIcon<T> {
+    pub(crate) fn new(
+        sys: crate::TrayIconSys<S, T>,
+        builder: TrayIconBuilder<S, T>,
+    ) -> TrayIcon<S, T> {
         TrayIcon { builder, sys }
     }
 
@@ -88,6 +93,16 @@ where
     }
 }
 
-unsafe impl<T> Sync for TrayIcon<T> where T: PartialEq + Clone + 'static {}
+unsafe impl<S, T> Sync for TrayIcon<S, T>
+where
+    S: Sender<T>,
+    T: PartialEq + Clone + 'static,
+{
+}
 
-unsafe impl<T> Send for TrayIcon<T> where T: PartialEq + Clone + 'static {}
+unsafe impl<S, T> Send for TrayIcon<S, T>
+where
+    S: Sender<T>,
+    T: PartialEq + Clone + 'static,
+{
+}

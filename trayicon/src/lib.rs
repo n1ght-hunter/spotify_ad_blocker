@@ -17,10 +17,13 @@ pub use crate::trayicon::TrayIcon;
 pub use crate::trayiconbuilder::Error;
 pub use crate::trayiconbuilder::TrayIconBuilder;
 
-pub type Sender<T> = tokio::sync::mpsc::Sender<T>;
-pub fn send<T>(sender: &Sender<T>, event: T) {
-    sender.try_send(event).map_err(|_|"error sending").unwrap();
+pub trait Sender<T>: Clone {
+    fn send(&self, event: T);
 }
+
+// pub fn send<T>(sender: &Sender<T>, event: T) {
+//     
+// }
 
 // Each OS specific implementation must export following:
 pub(crate) use crate::sys::{

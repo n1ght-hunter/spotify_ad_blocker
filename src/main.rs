@@ -4,7 +4,12 @@ pub mod ad_killer;
 
 use ad_killer::spotify_add_killer;
 use log::{debug, info, LevelFilter};
-use log4rs::{append::file::FileAppender, encode::pattern::PatternEncoder, Config, config::{Appender, Root}};
+use log4rs::{
+    append::file::FileAppender,
+    config::{Appender, Root},
+    encode::pattern::PatternEncoder,
+    Config,
+};
 use std::{mem::MaybeUninit, sync::Arc};
 use tokio::sync::Mutex;
 use trayicon::{MenuBuilder, TrayIconBuilder};
@@ -18,15 +23,32 @@ enum Events {
     Exit,
 }
 
+#[derive(Clone)]
+struct EventHanler<T>(tokio::sync::mpsc::Sender<T>);
+
+impl<T: Clone> trayicon::Sender<T> for EventHanler<T> {
+    fn send(&self, event: T) {
+        self.0.try_send(event).map_err(|_| "error sending").unwrap();
+    }
+}
+
 #[tokio::main]
 async fn main() {
     let logfile = FileAppender::builder()
-        .encoder(Box::new(PatternEncoder::new("{l} {d(%Y-%m-%d %H:%M:%S)(local)} - {m}\n")))
-        .build("log/output.log").unwrap();
+        .encoder(Box::new(PatternEncoder::new(
+            "{l} {d(%Y-%m-%d %H:%M:%S)(local)} - {m}\n",
+        )))
+        .build("log/output.log")
+        .unwrap();
 
     let config = Config::builder()
         .appender(Appender::builder().build("logfile", Box::new(logfile)))
-        .build(Root::builder().appender("logfile").build(LevelFilter::Debug)).unwrap();
+        .build(
+            Root::builder()
+                .appender("logfile")
+                .build(LevelFilter::Debug),
+        )
+        .unwrap();
 
     log4rs::init_config(config).unwrap();
 
@@ -42,7 +64,7 @@ async fn main() {
     debug!("setting up tray icon");
     // Needlessly complicated tray icon with all the whistles and bells
     let _tray_icon = TrayIconBuilder::new()
-        .sender(s)
+        .sender(EventHanler(s))
         .icon_from_buffer(icon)
         .tooltip("Exit Spotify ad blocker")
         .menu(MenuBuilder::new().item("Exit", Events::Exit))
