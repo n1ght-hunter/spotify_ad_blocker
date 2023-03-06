@@ -1,6 +1,6 @@
 use std::{ffi::OsString, os::windows::prelude::OsStringExt, sync::Arc, time::Duration};
 
-use log::{info, debug};
+use log::{debug, info};
 use tokio::sync::Mutex;
 use windows::{
     Media::Control::{
@@ -41,6 +41,12 @@ pub async fn spotify_add_killer(exit: Arc<Mutex<bool>>) {
             }
             ses.unwrap()
         };
+        debug!(
+            "{} && {}",
+            !data.title.contains("-"),
+            session.GetPlaybackInfo().unwrap().PlaybackStatus().unwrap()
+                == GlobalSystemMediaTransportControlsSessionPlaybackStatus::Playing
+        );
         if !data.title.contains("-")
             && session.GetPlaybackInfo().unwrap().PlaybackStatus().unwrap()
                 == GlobalSystemMediaTransportControlsSessionPlaybackStatus::Playing
@@ -56,7 +62,10 @@ pub async fn spotify_add_killer(exit: Arc<Mutex<bool>>) {
                 tokio::process::Command::new(data.exe_path.clone())
                     .args(["--minimized"])
                     .spawn()
-                    .unwrap().wait().await.unwrap();
+                    .unwrap()
+                    .wait()
+                    .await
+                    .unwrap();
                 tokio::time::sleep(Duration::from_millis(200)).await;
                 debug!("waiting to get spodify media session");
                 let session = {
