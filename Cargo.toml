@@ -1,16 +1,15 @@
 [package]
+edition = "2021"
 name = "spotify_ad_blocker"
 version = "1.0.0"
-edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-trayicon = {path = "trayicon"}
-tokio = { version = "1", features = ["full"] }
 log = "0.4.17"
 log4rs = "1.2.0"
-
+tokio = {version = "1", features = ["full"]}
+trayicon = {path = "trayicon"}
 
 [dependencies.windows]
 features = [
@@ -26,5 +25,5 @@ version = "0.43"
 
 [workspace]
 members = [
-    "trayicon",
+  "trayicon",
 ]
